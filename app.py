@@ -150,6 +150,189 @@ def index():
     return send_from_directory(app.static_folder, "index.html")
 
 
+@app.route("/health")
+def health():
+    """Health check endpoint for Azure Container Apps."""
+    return jsonify({"status": "healthy"}), 200
+
+
+# ---------------------------------------------------------------------------
+# OpenAPI spec for Azure AI Foundry agent tool
+# ---------------------------------------------------------------------------
+
+OPENAPI_SPEC = {
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Trademark Classification API",
+        "description": "Analyses a business website or description and returns relevant Nice Classification trademark classes with specification terms and confidence scores.",
+        "version": "1.0.0",
+    },
+    "servers": [{"url": "/"}],
+    "paths": {
+        "/classify": {
+            "post": {
+                "operationId": "classifyTrademarks",
+                "summary": "Classify a business URL into trademark classes",
+                "description": "Given a business website URL, scrapes the site to understand its services, then matches them against Nice Classification trademark classes. Returns relevant classes with specification terms and confidence scores.",
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "url": {
+                                        "type": "string",
+                                        "description": "The URL of the business website to analyse for trademark classification.",
+                                    },
+                                    "business_description": {
+                                        "type": "string",
+                                        "description": "A text description of the business services/products. Use this if a URL is not available.",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful classification",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "source": {
+                                            "type": "string",
+                                            "description": "The URL or source that was analysed.",
+                                        },
+                                        "classifications": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "class_number": {"type": "integer"},
+                                                    "class_name": {"type": "string"},
+                                                    "confidence": {"type": "integer"},
+                                                    "specifications": {
+                                                        "type": "array",
+                                                        "items": {"type": "string"},
+                                                    },
+                                                    "raw": {"type": "string"},
+                                                },
+                                            },
+                                        },
+                                        "raw": {
+                                            "type": "string",
+                                            "description": "The full raw classification text.",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    "400": {
+                        "description": "Bad request – missing URL or business description",
+                    },
+                    "500": {
+                        "description": "Server error during analysis",
+                    },
+                },
+            },
+        },
+    },
+}
+
+
+@app.route("/.well-known/openapi.json")
+def openapi_spec():
+    """Serve the OpenAPI spec for Azure AI Foundry agent discovery."""
+    return jsonify(OPENAPI_SPEC)
+
+
+@app.route("/openapi.json")
+def openapi_spec_alt():
+    """Alternate path for the OpenAPI spec."""
+    return jsonify(OPENAPI_SPEC)
+
+
+# ---------------------------------------------------------------------------
+# Agent-compatible /classify endpoint (JSON only, structured response)
+# ---------------------------------------------------------------------------
+
+def _parse_classification_line(line: str) -> dict:
+    """Parse a single classification line into structured data."""
+    import re
+    # Match: Class 9 – Scientific Apparatus (85%), spec1; spec2
+    match = re.match(
+        r"^Class\s+(\d+)\s*[\u2013\-]\s*(.+?)\s*\((\d+)%\)\s*,?\s*(.*)",
+        line, re.IGNORECASE,
+    )
+    if match:
+        return {
+            "class_number": int(match.group(1)),
+            "class_name": match.group(2).strip(),
+            "confidence": int(match.group(3)),
+            "specifications": [s.strip() for s in match.group(4).split(";") if s.strip()],
+            "raw": line,
+        }
+    # Fallback: Class N, specs
+    match2 = re.match(r"^Class\s+(\d+),?\s*(.*)", line, re.IGNORECASE)
+    if match2:
+        return {
+            "class_number": int(match2.group(1)),
+            "class_name": "",
+            "confidence": 0,
+            "specifications": [s.strip() for s in match2.group(2).split(";") if s.strip()],
+            "raw": line,
+        }
+    return {"class_number": 0, "class_name": "", "confidence": 0, "specifications": [], "raw": line}
+
+
+@app.route("/classify", methods=["POST"])
+def classify():
+    """Agent-compatible endpoint: accepts JSON with url or business_description."""
+    data = request.get_json(silent=True) or {}
+    url = (data.get("url") or "").strip()
+    description = (data.get("business_description") or "").strip()
+
+    if not url and not description:
+        return jsonify({"error": "Please provide a 'url' or 'business_description'."}), 400
+
+    # Get business text from URL or direct description
+    if url:
+        if not url.startswith(("http://", "https://")):
+            url = "https://" + url
+        try:
+            business_text = scrape_url(url)
+            source_label = url
+        except Exception as e:
+            return jsonify({"error": f"Could not fetch the provided URL: {e}"}), 400
+    else:
+        business_text = description[:12000]
+        source_label = "business_description"
+
+    try:
+        trademark_text = scrape_trademark_classes()
+    except Exception as e:
+        return jsonify({"error": f"Could not fetch trademark classes page: {e}"}), 500
+
+    try:
+        result = analyse_with_foundry(business_text, trademark_text)
+    except Exception as e:
+        return jsonify({"error": f"AI analysis failed: {e}"}), 500
+
+    # Parse into structured data
+    lines = [line.strip() for line in result.split("\n") if line.strip()]
+    classifications = [_parse_classification_line(line) for line in lines]
+
+    return jsonify({
+        "source": source_label,
+        "classifications": classifications,
+        "raw": result,
+    })
+
+
 @app.route("/analyse", methods=["POST"])
 def analyse():
     """Accept a URL or uploaded file, compare against trademark classes, return results."""
@@ -193,22 +376,18 @@ def analyse():
             return jsonify({"error": f"Could not fetch the provided URL: {e}"}), 400
 
     try:
-        # 2. Scrape the trademark classes reference
         trademark_text = scrape_trademark_classes()
     except Exception as e:
         return jsonify({"error": f"Could not fetch trademark classes page: {e}"}), 500
 
     try:
-        # 3. Analyse with Azure AI Foundry
         result = analyse_with_foundry(business_text, trademark_text)
     except Exception as e:
         return jsonify({"error": f"AI analysis failed: {e}"}), 500
 
     # Parse the result into structured data
     lines = [line.strip() for line in result.split("\n") if line.strip()]
-    classifications = []
-    for line in lines:
-        classifications.append({"raw": line})
+    classifications = [_parse_classification_line(line) for line in lines]
 
     return jsonify({
         "source": source_label,
