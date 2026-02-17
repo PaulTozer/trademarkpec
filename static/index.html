@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trademark Class Finder</title>
+    <style>
+        :root {
+            --primary: #0078d4;
+            --primary-dark: #005a9e;
+            --bg: #f5f6fa;
+            --card-bg: #ffffff;
+            --text: #1e1e1e;
+            --muted: #6b7280;
+            --border: #e0e0e0;
+            --success: #107c10;
+            --error: #d13438;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            margin-bottom: 32px;
+            font-size: 0.95rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+            padding: 28px 32px;
+            margin-bottom: 24px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 12px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 12px 16px;
+            font-size: 1rem;
+            border: 1.5px solid var(--border);
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--primary);
+        }
+
+        button {
+            padding: 12px 28px;
+            background: var(--primary);
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+
+        button:hover {
+            background: var(--primary-dark);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .help-text {
+            color: var(--muted);
+            font-size: 0.82rem;
+            margin-top: 8px;
+        }
+
+        /* Loading spinner */
+        .spinner-wrapper {
+            display: none;
+            align-items: center;
+            gap: 12px;
+            margin-top: 20px;
+            color: var(--muted);
+        }
+
+        .spinner-wrapper.visible {
+            display: flex;
+        }
+
+        .spinner {
+            width: 22px;
+            height: 22px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Results */
+        #results {
+            display: none;
+        }
+
+        #results.visible {
+            display: block;
+        }
+
+        #results h2 {
+            font-size: 1.15rem;
+            margin-bottom: 4px;
+        }
+
+        #results .analysed-url {
+            color: var(--muted);
+            font-size: 0.85rem;
+            margin-bottom: 18px;
+            word-break: break-all;
+        }
+
+        .class-row {
+            padding: 14px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.95rem;
+            line-height: 1.55;
+        }
+
+        .class-row:last-child {
+            border-bottom: none;
+        }
+
+        .class-number {
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        /* Error */
+        .error-msg {
+            display: none;
+            color: var(--error);
+            background: #fde7e9;
+            padding: 14px 18px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 0.92rem;
+        }
+
+        .error-msg.visible {
+            display: block;
+        }
+
+        /* Copy button */
+        .copy-btn {
+            margin-top: 16px;
+            padding: 8px 20px;
+            font-size: 0.88rem;
+            background: var(--success);
+        }
+
+        .copy-btn:hover {
+            background: #0b5e0b;
+        }
+
+        /* Divider */
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 20px 0 16px;
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        .divider span {
+            padding: 0 14px;
+        }
+
+        /* Upload area */
+        .upload-area {
+            position: relative;
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            padding: 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+        }
+
+        .upload-area:hover,
+        .upload-area.dragover {
+            border-color: var(--primary);
+            background: #f0f6ff;
+        }
+
+        .upload-area input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .upload-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            color: var(--muted);
+        }
+
+        .upload-placeholder svg {
+            opacity: 0.5;
+        }
+
+        .upload-file-name {
+            display: none;
+            color: var(--primary);
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .upload-file-name.visible {
+            display: block;
+        }
+
+        .class-name {
+            font-weight: 600;
+            color: #1e1e1e;
+        }
+
+        .class-specs {
+            display: block;
+            margin-top: 4px;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        .confidence {
+            display: inline-block;
+            font-size: 0.78rem;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 12px;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        .confidence.high {
+            background: #dff6dd;
+            color: #107c10;
+        }
+
+        .confidence.medium {
+            background: #fff4ce;
+            color: #8a6d00;
+        }
+
+        .confidence.low {
+            background: #fde7e9;
+            color: #d13438;
+        }
+
+        footer {
+            text-align: center;
+            color: var(--muted);
+            font-size: 0.8rem;
+            margin-top: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Trademark Class Finder</h1>
+        <p class="subtitle">
+            Paste a business website URL or upload a document to automatically identify
+            relevant trademark classes and specification terms.
+        </p>
+
+        <!-- Input card -->
+        <div class="card">
+            <label for="urlInput">Website URL</label>
+            <div class="input-group">
+                <input
+                    type="text"
+                    id="urlInput"
+                    placeholder="e.g. https://www.example.com"
+                    autocomplete="url"
+                />
+                <button id="analyseBtn" onclick="analyse()">Analyse</button>
+            </div>
+
+            <div class="divider"><span>or</span></div>
+
+            <label for="fileInput">Upload a Document</label>
+            <div class="upload-area" id="uploadArea">
+                <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.md,.csv" />
+                <div class="upload-placeholder" id="uploadPlaceholder">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    <span>Click or drag a PDF, DOCX, or TXT file here</span>
+                </div>
+                <div class="upload-file-name" id="uploadFileName"></div>
+            </div>
+            <p class="help-text">
+                Enter the full URL of the business website you want to classify.
+                The tool will read the site, compare it against the
+                <a href="https://www.londonip.co.uk/trademarks/tm-classes/" target="_blank" rel="noopener">
+                    Nice Classification trademark classes
+                </a>
+                and return matching classes with specification terms.
+            </p>
+
+            <div class="spinner-wrapper" id="spinner">
+                <div class="spinner"></div>
+                <span>Analysing — this may take 20-30 seconds&hellip;</span>
+            </div>
+
+            <div class="error-msg" id="errorMsg"></div>
+        </div>
+
+        <!-- Results card -->
+        <div class="card" id="results">
+            <h2>Recommended Trademark Classes</h2>
+            <p class="analysed-url" id="analysedUrl"></p>
+            <div id="classRows"></div>
+            <button class="copy-btn" onclick="copyResults()">Copy to Clipboard</button>
+        </div>
+
+        <footer>
+            Powered by Azure AI Foundry &middot; Trademark classifications are
+            indicative and should be reviewed by a qualified attorney.
+        </footer>
+    </div>
+
+    <script>
+        const urlInput = document.getElementById("urlInput");
+        const fileInput = document.getElementById("fileInput");
+        const uploadArea = document.getElementById("uploadArea");
+        const uploadPlaceholder = document.getElementById("uploadPlaceholder");
+        const uploadFileName = document.getElementById("uploadFileName");
+        const analyseBtn = document.getElementById("analyseBtn");
+        const spinner = document.getElementById("spinner");
+        const errorMsg = document.getElementById("errorMsg");
+        const resultsCard = document.getElementById("results");
+        const analysedUrl = document.getElementById("analysedUrl");
+        const classRows = document.getElementById("classRows");
+
+        // Allow pressing Enter in the input
+        urlInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") analyse();
+        });
+
+        // File input change
+        fileInput.addEventListener("change", () => {
+            if (fileInput.files.length > 0) {
+                uploadFileName.textContent = fileInput.files[0].name;
+                uploadFileName.classList.add("visible");
+                uploadPlaceholder.style.display = "none";
+            } else {
+                uploadFileName.classList.remove("visible");
+                uploadPlaceholder.style.display = "flex";
+            }
+        });
+
+        // Drag & drop styling
+        uploadArea.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            uploadArea.classList.add("dragover");
+        });
+        uploadArea.addEventListener("dragleave", () => uploadArea.classList.remove("dragover"));
+        uploadArea.addEventListener("drop", () => uploadArea.classList.remove("dragover"));
+
+        async function analyse() {
+            const url = urlInput.value.trim();
+            const hasFile = fileInput.files.length > 0;
+
+            if (!url && !hasFile) {
+                showError("Please enter a URL or upload a document.");
+                return;
+            }
+
+            hideError();
+            resultsCard.classList.remove("visible");
+            spinner.classList.add("visible");
+            analyseBtn.disabled = true;
+
+            try {
+                let resp;
+
+                if (hasFile) {
+                    // Send as multipart form data
+                    const formData = new FormData();
+                    formData.append("file", fileInput.files[0]);
+                    if (url) formData.append("url", url);
+                    resp = await fetch("/analyse", {
+                        method: "POST",
+                        body: formData,
+                    });
+                } else {
+                    // Send as JSON
+                    resp = await fetch("/analyse", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ url }),
+                    });
+                }
+
+                const data = await resp.json();
+
+                if (!resp.ok) {
+                    showError(data.error || "Something went wrong.");
+                    return;
+                }
+
+                renderResults(data);
+            } catch (err) {
+                showError("Network error \u2014 is the server running?");
+            } finally {
+                spinner.classList.remove("visible");
+                analyseBtn.disabled = false;
+            }
+        }
+
+        function renderResults(data) {
+            analysedUrl.textContent = data.source || data.url || "";
+            classRows.innerHTML = "";
+
+            if (!data.classifications || data.classifications.length === 0) {
+                classRows.innerHTML =
+                    '<p style="color:var(--muted)">No relevant classes found.</p>';
+                resultsCard.classList.add("visible");
+                return;
+            }
+
+            data.classifications.forEach((c) => {
+                const div = document.createElement("div");
+                div.className = "class-row";
+
+                const text = c.raw;
+                // Match: Class 9 – Scientific Apparatus (85%), spec1; spec2
+                const match = text.match(/^(Class\s+\d+)\s*[\u2013\-]\s*(.+?)\s*\((\d+)%\)\s*,?\s*(.*)/i);
+                if (match) {
+                    const classNum = match[1];
+                    const className = match[2].trim();
+                    const confidence = parseInt(match[3], 10);
+                    const specs = match[4].trim();
+                    const level = confidence >= 75 ? 'high' : confidence >= 50 ? 'medium' : 'low';
+                    div.innerHTML =
+                        '<span class="class-number">' + escapeHtml(classNum) + '</span>' +
+                        ' \u2013 <span class="class-name">' + escapeHtml(className) + '</span>' +
+                        '<span class="confidence ' + level + '">' + confidence + '% confidence</span>' +
+                        '<span class="class-specs">' + escapeHtml(specs) + '</span>';
+                } else {
+                    // Fallback: try simple Class N, specs format
+                    const simple = text.match(/^(Class\s+\d+),?\s*(.*)/i);
+                    if (simple) {
+                        div.innerHTML =
+                            '<span class="class-number">' + escapeHtml(simple[1]) + '</span>, ' +
+                            '<span class="class-specs">' + escapeHtml(simple[2]) + '</span>';
+                    } else {
+                        div.textContent = text;
+                    }
+                }
+
+                classRows.appendChild(div);
+            });
+
+            resultsCard.classList.add("visible");
+        }
+
+        function copyResults() {
+            const rows = document.querySelectorAll(".class-row");
+            const lines = Array.from(rows).map((r) => r.textContent);
+            navigator.clipboard.writeText(lines.join("\n")).then(() => {
+                const btn = document.querySelector(".copy-btn");
+                btn.textContent = "Copied!";
+                setTimeout(() => (btn.textContent = "Copy to Clipboard"), 2000);
+            });
+        }
+
+        function showError(msg) {
+            errorMsg.textContent = msg;
+            errorMsg.classList.add("visible");
+        }
+
+        function hideError() {
+            errorMsg.classList.remove("visible");
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement("div");
+            div.appendChild(document.createTextNode(str));
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
