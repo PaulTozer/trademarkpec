@@ -1,0 +1,56 @@
+# ---------------------------------------------------------------------------
+# Foundry Agent Definition – Trademark Classification Agent
+# ---------------------------------------------------------------------------
+# This file defines a hosted agent for the Microsoft Foundry Agent Service.
+#
+# Deploy with Azure Developer CLI:
+#   azd init -t https://github.com/Azure-Samples/azd-ai-starter-basic
+#   azd ai agent init -m ./agent.yaml
+#   azd up
+# ---------------------------------------------------------------------------
+
+# Unique identifier/name for this agent
+name: trademark-classifier
+
+# Brief description of what this agent does
+description: >
+  An AI agent that analyses business websites or descriptions and returns
+  relevant Nice Classification trademark classes with specification terms
+  and confidence scores. The agent scrapes business URLs, cross-references
+  against the Nice Classification system, and produces structured
+  classification results.
+
+metadata:
+  # Categorization tags for organizing and discovering agents
+  authors:
+    - Paul Tozer
+  tags:
+    - Trademark Classification
+    - Nice Classification
+    - Intellectual Property
+    - Web Scraping
+    - Azure AI Foundry
+
+template:
+  name: trademark-classifier
+  kind: hosted
+  protocols:
+    - protocol: responses
+  environment_variables:
+    - name: AZURE_AI_ENDPOINT
+      value: ${AZURE_AI_ENDPOINT}
+    - name: AZURE_AI_MODEL
+      value: "{{chat}}"
+    - name: AZURE_AI_API_KEY
+      value: ${AZURE_AI_API_KEY}
+  container:
+    port: "8080"
+    cpu: "0.5"
+    memory: "1.0Gi"
+    min_replicas: "0"
+    max_replicas: "3"
+
+resources:
+  - kind: model
+    id: gpt-5.2-chat
+    name: chat

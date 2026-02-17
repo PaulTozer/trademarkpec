@@ -1,0 +1,30 @@
+# ---------------------------------------------------------------------------
+# Azure Developer CLI (azd) project configuration
+# ---------------------------------------------------------------------------
+# Deploy to Microsoft Foundry with:
+#   azd up
+#
+# Or step-by-step:
+#   azd provision    # Create Azure resources
+#   azd deploy       # Build, push, and deploy the agent
+# ---------------------------------------------------------------------------
+
+name: trademark-classifier
+metadata:
+  template: azd-ai-starter-basic
+
+services:
+  trademark-classifier:
+    host: ai.foundry
+    project: src
+    language: python
+    agent: agent.yaml
+
+resources:
+  ai:
+    type: ai.foundry
+    model:
+      - name: chat
+        model: gpt-5.2-chat
+        sku: Standard
+        capacity: 10
